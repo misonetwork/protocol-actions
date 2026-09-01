@@ -10,6 +10,7 @@ use miso::test_helpers;
 use miso::track;
 use release_revenue_distributor::release_revenue_distributor as action;
 use std::unit_test::{assert_eq, destroy};
+use sui::accumulator::AccumulatorRoot;
 use sui::balance;
 use sui::coin::{Self, Coin};
 use sui::event;
@@ -158,12 +159,88 @@ fun vault_admin_borrow_action_put_back_and_borrow_again() {
     scenario.end();
 }
 
+#[test]
+fun settled_value_helper_distributes_full_amount_and_later_remainder() {
+    let mut scenario = test_scenario::begin(@0xA);
+    let (mut release, admin_cap, _recording_a, _recording_b) = fixture(scenario.ctx());
+    let release_address = object::id(&release).to_address();
+    balance::create_for_testing<CURRENCY>(10_001).send_funds(release_address);
+
+    scenario.next_tx(@0xB);
+    action::redeem_settled_value_and_distribute_for_testing<CURRENCY>(
+        &mut release,
+        &admin_cap,
+        10_001,
+    );
+    let summaries = event::events_by_type<action::ReleaseRevenueDistributedEvent<CURRENCY>>();
+    let (_, first_input, first_distributed, first_remainder) =
+        action::distribution_event_fields(&summaries[0]);
+    assert_eq!(first_input, 10_001);
+    assert_eq!(first_distributed, 10_000);
+    assert_eq!(first_remainder, 1);
+
+    // The first call requeues its one-unit flooring remainder. Batch it with
+    // later revenue so the next settled redemption has no rounding dust.
+    balance::create_for_testing<CURRENCY>(9_999).send_funds(release_address);
+    scenario.next_tx(@0xC);
+    action::redeem_settled_value_and_distribute_for_testing<CURRENCY>(
+        &mut release,
+        &admin_cap,
+        10_000,
+    );
+    let summaries = event::events_by_type<action::ReleaseRevenueDistributedEvent<CURRENCY>>();
+    assert_eq!(summaries.length(), 1);
+    let (_, second_input, second_distributed, second_remainder) =
+        action::distribution_event_fields(&summaries[0]);
+    assert_eq!(second_input, 10_000);
+    assert_eq!(second_distributed, 10_000);
+    assert_eq!(second_remainder, 0);
+
+    destroy(release);
+    destroy(admin_cap);
+    scenario.end();
+}
+
+/// The unit VM does not populate a positive consensus `AccumulatorRoot`
+/// snapshot after `send_funds`. This pins the honest local boundary; a funded
+/// `redeem_all_and_distribute` success remains a network E2E requirement.
+#[test]
+fun funded_accumulator_snapshot_documents_zero_vm_result() {
+    let mut scenario = test_scenario::begin(@0x0);
+    sui::accumulator::create_for_testing(scenario.ctx());
+    let (release, admin_cap, _, _) = fixture(scenario.ctx());
+    let release_address = object::id(&release).to_address();
+
+    scenario.next_tx(@0xA);
+    balance::create_for_testing<CURRENCY>(10_001).send_funds(release_address);
+    scenario.next_tx(@0xB);
+    let root = scenario.take_shared<AccumulatorRoot>();
+    assert_eq!(balance::settled_funds_value<CURRENCY>(&root, release_address), 0);
+    test_scenario::return_shared(root);
+
+    destroy(release);
+    destroy(admin_cap);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = EUnauthorized, location = release)]
 fun another_releases_cap_is_rejected() {
     let ctx = &mut tx_context::dummy();
     let (mut release, _cap, _, _) = fixture(ctx);
     let (_other_release, other_cap, _, _) = fixture(ctx);
     action::redeem_and_distribute<CURRENCY>(&mut release, &other_cap, 1);
+    abort
+}
+
+#[test, expected_failure(abort_code = EUnauthorized, location = release)]
+fun redeem_all_rejects_foreign_cap_on_empty_settled_snapshot() {
+    let mut scenario = test_scenario::begin(@0x0);
+    sui::accumulator::create_for_testing(scenario.ctx());
+    scenario.next_tx(@0xA);
+    let (mut release, _admin_cap, _, _) = fixture(scenario.ctx());
+    let (_other_release, other_admin_cap, _, _) = fixture(scenario.ctx());
+    let root = scenario.take_shared<AccumulatorRoot>();
+    action::redeem_all_and_distribute<CURRENCY>(&mut release, &other_admin_cap, &root);
     abort
 }
 
@@ -181,6 +258,28 @@ fun zero_redeem_aborts() {
     let (mut release, admin_cap, _, _) = fixture(ctx);
     action::redeem_and_distribute<CURRENCY>(&mut release, &admin_cap, 0);
     abort
+}
+
+#[test]
+fun redeem_all_is_an_idempotent_no_op_without_settled_funds() {
+    let mut scenario = test_scenario::begin(@0x0);
+    sui::accumulator::create_for_testing(scenario.ctx());
+    scenario.next_tx(@0xA);
+    let (mut release, admin_cap, _, _) = fixture(scenario.ctx());
+    let root = scenario.take_shared<AccumulatorRoot>();
+    action::redeem_all_and_distribute<CURRENCY>(&mut release, &admin_cap, &root);
+    assert_eq!(
+        event::events_by_type<action::ReleaseRevenueDistributedEvent<CURRENCY>>().length(),
+        0,
+    );
+    assert_eq!(
+        event::events_by_type<action::ReleaseTrackRevenueDistributedEvent<CURRENCY>>().length(),
+        0,
+    );
+    test_scenario::return_shared(root);
+    destroy(release);
+    destroy(admin_cap);
+    scenario.end();
 }
 
 #[test, expected_failure]

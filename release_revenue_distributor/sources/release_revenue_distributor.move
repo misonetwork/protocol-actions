@@ -10,7 +10,8 @@ module release_revenue_distributor::release_revenue_distributor;
 
 use hikida::hikida;
 use miso::release::{Release, ReleaseAdminCap};
-use sui::balance::Balance;
+use sui::accumulator::AccumulatorRoot;
+use sui::balance::{Self, Balance};
 use sui::coin::Coin;
 use sui::event::emit;
 use sui::transfer::Receiving;
@@ -40,6 +41,33 @@ public fun redeem_and_distribute<Currency>(
 ) {
     let revenue = hikida::redeem_balance<Currency>(release.uid_mut(admin_cap), value);
     distribute(release, revenue)
+}
+
+/// Redeem all Release funds settled at the start of the current consensus
+/// commit and distribute them according to the immutable tracklist.
+///
+/// The framework snapshot is capped at `u64::MAX`; excess funds, newly sent
+/// funds, and per-track flooring remainder settle for a later call. This fixed
+/// crank prevents permissionless adapters from selecting dust-sized fragments.
+/// A zero settled snapshot is an idempotent no-op.
+public fun redeem_all_and_distribute<Currency>(
+    release: &mut Release,
+    admin_cap: &ReleaseAdminCap,
+    root: &AccumulatorRoot,
+) {
+    let value = balance::settled_funds_value<Currency>(root, object::id(release).to_address());
+    redeem_settled_value_and_distribute<Currency>(release, admin_cap, value)
+}
+
+/// Redeem a previously read settled snapshot when it is positive.
+fun redeem_settled_value_and_distribute<Currency>(
+    release: &mut Release,
+    admin_cap: &ReleaseAdminCap,
+    value: u64,
+) {
+    release.authorize(admin_cap);
+    if (value == 0) return;
+    redeem_and_distribute<Currency>(release, admin_cap, value)
 }
 
 /// Receive selected coins sent to the Release and distribute their combined
@@ -103,4 +131,13 @@ public fun distribution_event_fields<Currency>(
     event: &ReleaseRevenueDistributedEvent<Currency>,
 ): (ID, u64, u64, u64) {
     (event.release_id, event.total_input, event.total_distributed, event.remainder)
+}
+
+#[test_only]
+public fun redeem_settled_value_and_distribute_for_testing<Currency>(
+    release: &mut Release,
+    admin_cap: &ReleaseAdminCap,
+    value: u64,
+) {
+    redeem_settled_value_and_distribute<Currency>(release, admin_cap, value)
 }
