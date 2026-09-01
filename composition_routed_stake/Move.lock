@@ -25,7 +25,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.composition_routed_stake]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "7799760C9AA9A77FC9FFC26D0B446B8FDF3DAEC10A4D1336CE2EC38A8775BEAF"
+manifest_digest = "FE9EFBAB43F491EAFC23CCC0B06C9063309573B2F3BEFDD9812391F70BB93B57"
 deps = { hikida = "hikida", miso = "miso", routed_stake = "routed_stake", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.testnet.hikida]
@@ -59,7 +59,7 @@ manifest_digest = "A14B8EEA8117AE9FF640B7D0633A291D278C3AACD2905B9C74DB5C056E785
 deps = { hikida = "hikida", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.vault]
-source = { git = "https://github.com/misofm/vault.git", subdir = ".", rev = "e85027f282ef05692ce78011c6eb5e5e4411f6d1" }
+source = { git = "https://github.com/misofm/vault.git", subdir = ".", rev = "a171b3ad5a69868da857a361cbfb3503ff64e780" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

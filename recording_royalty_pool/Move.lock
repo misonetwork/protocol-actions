@@ -43,7 +43,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.recording_royalty_pool]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "980F5DA22778B950500237B921A2BBB0621A49000F9D450CB753E0BC430F0B1F"
+manifest_digest = "ADA5ABA37E7BA113815830678C6219ACAE1C87F1055895CD5C9F92D5BB3C5231"
 deps = { hikida = "hikida", miso = "miso", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.testnet.royalty_pool]
@@ -53,7 +53,7 @@ manifest_digest = "A14B8EEA8117AE9FF640B7D0633A291D278C3AACD2905B9C74DB5C056E785
 deps = { hikida = "hikida", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.vault]
-source = { git = "https://github.com/misofm/vault.git", subdir = ".", rev = "e85027f282ef05692ce78011c6eb5e5e4411f6d1" }
+source = { git = "https://github.com/misofm/vault.git", subdir = ".", rev = "a171b3ad5a69868da857a361cbfb3503ff64e780" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
